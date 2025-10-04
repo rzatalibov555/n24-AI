@@ -7,6 +7,7 @@
         font-size: 20px!important;
         line-height: 25px!important;
     }
+   
 </style>
 <!-- <section class="news-latest-posts">
     <div class="container">
@@ -106,7 +107,7 @@
             
             <div class="col-xl-4 col-lg-8 col-md-12 mt-md-0 mt-4 order-xl-3">
                 <div class="blog-post post-style-13 border-top-0 b-0 pt-0 mt-0">
-                    <div class="blog-post-details"> <span class="badge text-blue">nation</span>
+                    <div class="blog-post-details"> <span class="badge text-blue marBot7">nation</span>
                         <h6 class="blog-title"><a href="#">Britain’s Best Selling Daily Broadsheet.</a></h6>
                         <div class="blog-post-meta">
                             <div class="blog-post-time"> <a href="#"><i class="fa-solid fa-calendar-days"></i>Feb 25 2022</a> </div>

@@ -49,6 +49,43 @@ class Openai {
             return "API cavabı yoxdur: " . json_encode($result);
         }
     }
+
+
+
+
+
+    // embed metodu: Metinə əsasən gömülü vektörü əldə edir.
+
+    public function embed($text, $model = "openai/text-embedding-3-small") {
+    $ch = curl_init();
+
+    $data = [
+        "model" => $model,
+        "input" => $text
+    ];
+
+    curl_setopt($ch, CURLOPT_URL, "https://openrouter.ai/api/v1/embeddings");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer " . $this->api_key,
+        "Content-Type: application/json",
+        "HTTP-Referer: http://localhost",
+        "X-Title: My CI3 App"
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+    $response = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        return "Curl error: " . curl_error($ch);
+    }
+
+    curl_close($ch);
+    $result = json_decode($response, true);
+
+    return $result['data'][0]['embedding'] ?? null;
+}
 }
 
 

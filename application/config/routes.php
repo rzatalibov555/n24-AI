@@ -101,6 +101,10 @@ $route["register"]["GET"] = "user/AuthController/register";
 
 /*<================> Admin Routes <================>*/
 
+// AI
+$route['admin/news/chatgpt_search'] = 'admin/NewsController/chatgpt_search';
+$route['admin/news/ajax_search'] = 'admin/NewsController/ajax_search';
+// AI
 
 
 /*<========> Auth Routes <========>*/

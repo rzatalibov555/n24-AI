@@ -9,7 +9,7 @@ class NewsController extends CRUD_Controller
         $this->load->model("admin/NewsModel");
         $this->load->model("admin/CategoriesModel");
         $this->load->library('openai'); // SEO generasiyası üçün lazım olacaq
-        
+
     }
 
     public function index()
@@ -17,12 +17,8 @@ class NewsController extends CRUD_Controller
         $context = [
             "page_title" => $this->lang->line("all_news"),
         ];
-        // $question = "Salam ChatGPT! CodeIgniter3-də sən necə işləyirsən?";
-        // $answer = $this->openai->ask($question);
 
-        // echo "<b>Sual:</b> $question <br><br>";
-        // echo "<b>Cavab:</b> $answer";
-        // die();
+       
         $this->load->view("admin/news/list", $context);
     }
 
@@ -133,7 +129,7 @@ class NewsController extends CRUD_Controller
         ) {
 
             // ============================================
-             // ✅ SEO məlumatlarını avtomatik yaratmaq üçün OpenAI çağırışı
+            // ✅ SEO məlumatlarını avtomatik yaratmaq üçün OpenAI çağırışı
             $seo_prompt = "Mənim üçün aşağıdakı xəbərə SEO məlumatları yarat:
             
             Başlıq: $title_az
@@ -185,6 +181,17 @@ class NewsController extends CRUD_Controller
                 "seo_description" => $seo_data['seo_description'],
                 "seo_keywords"    => $seo_data['seo_keywords'],
             ]);
+
+
+            // ============================================
+            // ✅ Embedding yaratmaq mentiqi axtaris ucun
+            $text_for_embedding = $title_az . " " . $short_description_az . " " . strip_tags($long_description_az);
+            $embedding = $this->openai->embed($text_for_embedding);
+
+            if ($embedding) {
+                $data["embedding"] = json_encode($embedding);
+            }
+            // ============================================
 
             $this->NewsModel->create($data);
 
@@ -372,6 +379,16 @@ class NewsController extends CRUD_Controller
                 "seo_keywords"    => $seo_data['seo_keywords'],
             ];
 
+            // ============================================
+            // ✅ Embedding yeniləmək
+            $text_for_embedding = $title_az . " " . $short_description_az . " " . strip_tags($long_description_az);
+            $embedding = $this->openai->embed($text_for_embedding);
+
+            if ($embedding) {
+                $data["embedding"] = json_encode($embedding);
+            }
+            // ============================================
+
             $this->NewsModel->update($id, $data);
 
             $this->notifier("notifier", "success", [
@@ -489,4 +506,258 @@ class NewsController extends CRUD_Controller
 
         $this->datatable_json("news", $columns, $searchable_columns);
     }
+
+
+    // cosine_similarity (axtarisda istifadə edəcəyik) Vektor
+    private function cosine_similarity($vec1, $vec2)
+    {
+        $dot = 0.0;
+        $norm1 = 0.0;
+        $norm2 = 0.0;
+
+        for ($i = 0; $i < count($vec1); $i++) {
+            $dot += $vec1[$i] * $vec2[$i];
+            $norm1 += $vec1[$i] ** 2;
+            $norm2 += $vec2[$i] ** 2;
+        }
+
+        return $dot / (sqrt($norm1) * sqrt($norm2));
+    }
+
+
+    public function semantic_search($query, $limit = 10)
+    {
+        $this->load->library('openai');
+
+        // 1. Sorğunu embedding et
+        $query_embedding = $this->openai->embed($query);
+        if (!$query_embedding) return [];
+
+        // 2. Xəbərləri götür
+        $news = $this->db->get('news')->result();
+        $results = [];
+
+        // 3. Similarity hesabla
+        foreach ($news as $n) {
+            if (!$n->embedding) continue;
+            $embedding = json_decode($n->embedding, true);
+            $similarity = $this->cosine_similarity($query_embedding, $embedding);
+            $results[] = [
+                "news" => $n,
+                "score" => $similarity
+            ];
+        }
+
+        // 4. Oxşarlığa görə sırala
+        usort($results, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+
+        return array_slice($results, 0, $limit);
+    }
+
+    /**
+     * ChatGPT axtarış üçün view
+     */
+    // public function chatgpt_search()
+    // {
+    //     $context = [
+    //         "page_title" => "ChatGPT Axtarış"
+    //     ];
+    //     //  $all_news = $this->NewsModel->with_author_category();
+    //     // print_r("<pre>")
+    //     // print_r($all_news);
+
+    //     $this->load->view("admin/news/chatgpt_search", $context);
+    // }
+
+
+    // public function ajax_search()
+    // {
+    //     header('Content-Type: application/json; charset=utf-8');
+
+    //     $query = trim($this->input->get("q", true));
+    //     if (empty($query)) {
+    //         echo json_encode([
+    //             "status" => "error",
+    //             "message" => "Axtarış sözü boş ola bilməz."
+    //         ]);
+    //         exit;
+    //     }
+
+    //     // Mövcud xəbərləri çək (model dəyişmir)
+    //     $all_news = $this->NewsModel->with_author_category();
+
+    //     // Local filter
+    //     $local_results = [];
+    //     foreach ($all_news as $news) {
+    //         if (
+    //             stripos($news['title_az'], $query) !== false ||
+    //             stripos($news['title_en'], $query) !== false
+    //         ) {
+    //             $local_results[] = [
+    //                 "id" => $news['id'],
+    //                 "title_az" => $news['title_az'],
+    //                 "title_en" => $news['title_en'],
+    //                 "short_description_az" => $news['short_description_az'],
+    //                 "short_description_en" => $news['short_description_en'],
+    //                 "img" => $news['img'],
+    //                 "category_id" => $news['category_id'],
+    //                 "author_id" => $news['author_id'],
+    //                 "type" => $news['type'],
+    //                 "status" => $news['status'],
+    //             ];
+    //         }
+    //     }
+
+    //     // ChatGPT ağıllı sıralama
+    //     if (!empty($local_results)) {
+    //         $prompt = "Sən CodeIgniter3 admin panel köməkçisisən. ".
+    //             "Aşağıdakı xəbərləri sorğuya görə sıralayıb JSON formatında ver.\n".
+    //             "Sorğu: \"$query\"\n".
+    //             "Xəbərlər: " . json_encode($local_results) . "\n".
+    //             "Cavab formatı:\n".
+    //             "[{\"id\": 1, \"title_az\": \"...\", \"title_en\": \"...\", \"short_description_az\": \"...\", \"short_description_en\": \"...\"}]";
+
+    //         $ai_response = $this->openai->ask($prompt, "openai/gpt-3.5-turbo");
+
+    //         // Regex ilə JSON çıxar
+    //         $matches = [];
+    //         if (preg_match('/\[(.*?)\]/s', $ai_response, $matches)) {
+    //             $ai_parsed = json_decode($matches[0], true);
+    //             if ($ai_parsed) $local_results = $ai_parsed;
+    //         }
+    //     }
+
+    //     echo json_encode([
+    //         "status" => "success",
+    //         "results" => $local_results
+    //     ]);
+    //     exit;
+    // }
+
+
+
+
+    // public function ajax_search()
+    // {
+    //     header('Content-Type: application/json; charset=utf-8');
+
+    //     $query = trim($this->input->get("q", true));
+    //     if (empty($query)) {
+    //         echo json_encode([
+    //             "status" => "error",
+    //             "message" => "Axtarış sözü boş ola bilməz."
+    //         ]);
+    //         exit;
+    //     }
+
+    //     // 1️⃣ Mövcud xəbərləri çək
+    //     $all_news = $this->NewsModel->with_author_category();
+
+    //     // 2️⃣ Local PHP filter
+    //     $local_results = [];
+    //     foreach ($all_news as $news) {
+    //         if (
+    //             stripos($news['title_az'], $query) !== false ||
+    //             stripos($news['title_en'], $query) !== false
+    //         ) {
+    //             $local_results[] = [
+    //                 "id" => $news['id'],
+    //                 "title_az" => $news['title_az'],
+    //                 "title_en" => $news['title_en']
+    //             ];
+    //         }
+    //     }
+
+    //     // 3️⃣ OpenAI ChatGPT ağıllı sıralama
+    //     if (!empty($local_results)) {
+    //         $prompt = "Sən CodeIgniter3 admin panel köməkçisisən. ".
+    //             "Aşağıdakı xəbərləri sorğuya görə sıralayıb JSON formatında ver.\n".
+    //             "Sorğu: \"$query\"\n".
+    //             "Xəbərlər: " . json_encode($local_results) . "\n".
+    //             "Cavab formatı:\n".
+    //             "[{\"id\": 1, \"title_az\": \"...\", \"title_en\": \"...\"}]";
+
+    //         $ai_response = $this->openai->ask($prompt, "openai/gpt-3.5-turbo");
+
+    //         // Regex ilə JSON çıxar
+    //         $matches = [];
+    //         if (preg_match('/\[(.*?)\]/s', $ai_response, $matches)) {
+    //             $ai_parsed = json_decode($matches[0], true);
+    //             if ($ai_parsed) $local_results = $ai_parsed; // AI nəticə override edir
+    //         }
+    //     }
+
+    //     // 4️⃣ JSON cavab göndər
+    //     echo json_encode([
+    //         "status" => "success",
+    //         "results" => $local_results
+    //     ]);
+    //     exit;
+    // }
+
+
+    // public function ajax_search()
+    // {
+    //     header('Content-Type: application/json; charset=utf-8');
+
+    //     // 1️⃣ Sorğu al
+    //     $query = trim($this->input->get("q", true));
+    //     if (empty($query)) {
+    //         echo json_encode([
+    //             "status" => "error",
+    //             "message" => "Axtarış sözü boş ola bilməz."
+    //         ]);
+    //         exit;
+    //     }
+
+    //     // 2️⃣ Mövcud xəbərləri çək
+    //     $all_news = $this->NewsModel->with_author_category();
+
+    //     // 3️⃣ Local PHP filter (modeli dəyişmirik)
+    //     $results = [];
+    //     foreach ($all_news as $news) {
+    //         if (
+    //             stripos($news['title_az'], $query) !== false ||
+    //             stripos($news['title_en'], $query) !== false
+    //         ) {
+    //             $results[] = [
+    //                 "id" => $news['id'],
+    //                 "title_az" => $news['title_az'],
+    //                 "title_en" => $news['title_en']
+    //             ];
+    //         }
+    //     }
+
+    //     // 4️⃣ OpenAI ChatGPT ilə də sorğu göndər (opsional)
+    //     // Əgər AI cavab istəmirsə, bu hissəni silə bilərsən
+    //     if (!empty($results)) {
+    //         $prompt = "Sən CodeIgniter3 admin panel köməkçisisən. ".
+    //             "Aşağıdakı sorğuya uyğun xəbərlərin ID və başlıqlarını JSON formatında ver:\n".
+    //             "Sorğu: \"$query\"\n".
+    //             "Mövcud xəbərlər: " . json_encode($results) . "\n".
+    //             "JSON formatında cavab ver:\n".
+    //             "[{\"id\": 1, \"title_az\": \"...\", \"title_en\": \"...\"}]";
+
+    //         $ai_response = $this->openai->ask($prompt, "openai/gpt-3.5-turbo");
+
+    //         // Regex ilə JSON çıxar
+    //         $matches = [];
+    //         if (preg_match('/\[(.*?)\]/s', $ai_response, $matches)) {
+    //             $ai_parsed = json_decode($matches[0], true);
+    //             if ($ai_parsed) $results = $ai_parsed; // AI nəticə override edir
+    //         }
+    //     }
+
+    //     // 5️⃣ JSON cavab göndər
+    //     echo json_encode([
+    //         "status" => "success",
+    //         "results" => $results
+    //     ]);
+    //     exit;
+    // }
+
+
+
 }
